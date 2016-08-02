@@ -1,29 +1,38 @@
 package gowdns
 
 import (
-	"bufio"
-	"fmt"
+	"io/ioutil"
 	"os/exec"
 )
 
-func executeCommand(ec *ExecutableConfig) error {
+func executeCommand(ec *ExecutableConfig) (string, string, error) {
 	cmd := exec.Command(ec.Executable, ec.Flags...)
-	outputBuffer, err := cmd.StdoutPipe()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return "<stdout: error>", "<stderr: nil>", err
 	}
 
-	err = cmd.Run()
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return "<stdout: nil>", "<stderr: error>", err
 	}
 
-	if ec.Stdout != nil {
-		scanner := bufio.NewScanner(outputBuffer)
-		for scanner.Scan() {
-			fmt.Fprintf(ec.Stdout, "%s\n", scanner.Text())
-		}
+	err = cmd.Start()
+	if err != nil {
+		return "<stdout: nil>", "<stderr: nil>", err
 	}
 
-	return nil
+	stdoutToString, err := ioutil.ReadAll(stdout)
+	if err != nil {
+		return "<stdout: " + err.Error() + ">", "<stderr: nil>", err
+	}
+
+	stderrToString, err := ioutil.ReadAll(stderr)
+	if err != nil {
+		return string(stdoutToString), "<stderr: " + err.Error() + ">", err
+	}
+
+	err = cmd.Wait()
+	return string(stdoutToString), string(stderrToString), err
 }
